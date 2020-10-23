@@ -17,6 +17,9 @@
         "build": {
           "builder": "@angular-devkit/build-angular:browser",
           "options": {
+            "allowedCommonJsDependencies": [
+              "es6-promise-polyfill"
+            ],
             "outputPath": "dist/canvas-prototype",
             "index": "src/index.html",
             "main": "src/main.ts",

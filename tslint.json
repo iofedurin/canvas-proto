@@ -27,6 +27,7 @@
         "spaces"
       ]
     },
+    "only-arrow-functions": false,
     "max-classes-per-file": false,
     "max-line-length": [
       true,
@@ -83,8 +84,7 @@
       }
     },
     "typedef": [
-      true,
-      "call-signature"
+      true
     ],
     "typedef-whitespace": {
       "options": [
