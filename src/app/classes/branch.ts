@@ -1,5 +1,5 @@
 import {Connection} from './connection';
-import {Container, Graphics, InteractionEvent} from 'pixi.js';
+import {Container, Graphics, InteractionData, InteractionEvent} from 'pixi.js';
 import {Subject} from 'rxjs';
 
 export type BranchOptions = {
@@ -14,12 +14,20 @@ export class Branch {
   private readonly container: Container;
   public connection: Connection;
   public connectionPoint: Graphics;
-  private dotClick$ = new Subject<Branch>();
-  private mouseUp$ = new Subject<Branch>();
+  /**
+   * Сабджект, чтоб эмитить нажатия на кнопку
+   * @private
+   */
+  private dotClick$ = new Subject<Graphics>();
+  /**
+   * Сабджект, чтоб эмитить, что отпустили на прямоугольнике
+   * @private
+   */
+  private mouseUp$ = new Subject<Graphics>();
 
   constructor(options?: BranchOptions) {
     this.container = this.initBranchContainer();
-    this.initCardListeners();
+    this.initDragListeners();
   }
 
   get dotClicks() {
@@ -46,49 +54,58 @@ export class Branch {
       const rectangle = new Graphics();
       rectangle.lineStyle(1.5, 0xC7CAD1);
       rectangle.beginFill(0xFFFFFF);
-      rectangle.drawRoundedRect(50, 50, 100, this.height, 10);
+      rectangle.drawRoundedRect(0, 0, 100, this.height, 10);
       rectangle.endFill();
       rectangle.interactive = true;
       rectangle.buttonMode = true;
       return rectangle;
     };
-
-    const drawConnectionPoint = () => {
+    /**
+     * Рисуем прямоугольник, делаем его интерактивным (шлет ивенты на нажатия).
+     * buttonMode === cursor: pointer;
+     * @param wrapper - элемент, на ширину которого нужно ориентироваться при позиционировании кнопки
+     */
+    const drawConnectionPoint = (wrapper: Container) => {
       const circle = new Graphics();
-      circle.beginFill(0xDE3249, 1);
-      circle.drawCircle(60, 60, 7);
+      circle.lineStyle(1.5, 0x000000, 1);
+      circle.beginFill(0xFFFFFF, 1);
+      const circleRadius = 4;
+      // вычетание половины радиуса нужно, чтоб оцентровать его
+      circle.drawCircle(- circleRadius / 2, - circleRadius / 2, circleRadius);
       circle.endFill();
       circle.interactive = true;
       circle.buttonMode = true;
+      circle.x = wrapper.width;
+      circle.y = wrapper.height / 2;
       return circle;
     };
 
     const container = new Container();
     const card = drawCard();
-    const connectionPoint = drawConnectionPoint();
+    const connectionPoint = drawConnectionPoint(card);
     container.addChild(card);
     container.addChild(connectionPoint);
-    return card;
+    return container;
   }
 
-  private initCardListeners() {
-    let data;
-    let dragging = false;
-    const onDragStart = (event) => {
+  /**
+   * Обработка ивентов для перемещения блока по канвасу
+   * @private
+   */
+  private initDragListeners() {
+    let data: InteractionData; // инфа о ивенте mousedown по элементу
+    let dragging = false; // маркер того, идет ли перемещиение эелемента в данный момент
+
+    const onDragStart = (event: InteractionEvent) => {
       this.container.alpha = 0.7; // opacity
       data = event.data;
       dragging = true;
-      event.stopPropagation(); // чтоб ивент перемещения не прокидывался на полотно
+      event.stopPropagation(); // чтоб ивент нажатия на элемент не прокидывался на полотно
     };
     const onDragEnd = () => {
       this.container.alpha = 1;
       dragging = false;
       data = null;
-    };
-    const emitMouseUp = (event: InteractionEvent) => {
-      console.log('card up');
-      this.mouseUp$.next(this);
-      event.stopPropagation();
     };
     const onDragMove = () => {
       if (dragging) {
@@ -100,15 +117,14 @@ export class Branch {
     this.container
       .on('pointerdown', onDragStart)
       .on('pointerup', onDragEnd)
-      .on('pointerup', emitMouseUp)
       .on('pointerupoutside', onDragEnd)
       .on('pointermove', onDragMove);
   }
 
-  private initDotListeners() {
-    this.connectionPoint.on('pointerdown', (event: MouseEvent) => {
-      event.stopPropagation();
-      this.dotClick$.next(this);
-    });
-  }
+  //private initDotListeners() {
+  //  this.connectionPoint.on('pointerdown', (event: MouseEvent) => {
+  //    event.stopPropagation();
+  //    this.dotClick$.next(this);
+  //  });
+  //}
 }
