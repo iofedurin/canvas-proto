@@ -1,6 +1,6 @@
 import {Branch} from './branch';
 import {Container, Graphics, InteractionEvent} from 'pixi.js';
-import {fromEvent, Subject} from 'rxjs';
+import {fromEvent, merge, Subject} from 'rxjs';
 import {takeUntil} from 'rxjs/operators';
 
 export interface IPoint {
@@ -40,13 +40,14 @@ export class Connection extends Graphics {
    * Добавляем ветку в связь, если есть source, то значит связь "закрываем"
    * @param branch
    */
-  public addConnectionSide(branch: Branch) {
+  public addConnectionSide(branch: Branch): void {
     if (!this.sourceBranch) {
       this.sourceBranch = branch;
       this.startDrawing(branch.connectionPoint);
     } else {
       this.targetBranch = branch;
       this.finalizeLine();
+      this.listenBranchMoves();
     }
   }
 
@@ -54,7 +55,7 @@ export class Connection extends Graphics {
    * Удаляем предыдущую линию, рисуем новую по двум точкам
    * @private
    */
-  private drawLine(from: IPoint, to: IPoint) {
+  private drawLine(from: IPoint, to: IPoint): void {
     this.prevLine?.destroy();
     const line = new Graphics();
     line.lineStyle(1, 0x000000, 0.7);
@@ -67,7 +68,7 @@ export class Connection extends Graphics {
   /**
    * Заканчиваем отрисовку, удаляем существу
    */
-  public dropConnection() {
+  public dropConnection(): void {
     this.stopDrawing();
     this.prevLine?.destroy();
     this.sourceBranch = undefined;
@@ -78,11 +79,18 @@ export class Connection extends Graphics {
    * Заканчиваем отрисовку, перерисовывам связь с учетом координат двух блоков
    * @private
    */
-  private finalizeLine() {
+  private finalizeLine(): void {
     this.stopDrawing();
-    this.sourceBranch.connection = this;
-    this.targetBranch.connection = this;
+    this.sourceBranch.connections.push({ type: 'source', connection: this });
+    this.targetBranch.connections.push({ type: 'target', connection: this });
+    this.redraw();
+  }
 
+  /**
+   * Перерисовать связь по двум известным концам связи
+   * @private
+   */
+  private redraw() {
     const sourcePoint: IPoint = {
       x: this.sourceBranch.connectionSourceGlobalCoordinates.x,
       y: this.sourceBranch.connectionSourceGlobalCoordinates.y
@@ -99,7 +107,7 @@ export class Connection extends Graphics {
    * @param connectionSource
    * @private
    */
-  private startDrawing(connectionSource: Graphics) {
+  private startDrawing(connectionSource: Graphics): void {
     this.drawing = true;
     fromEvent(connectionSource, 'pointermove')
       .pipe(takeUntil(this.stopDraw$))
@@ -117,16 +125,23 @@ export class Connection extends Graphics {
    * Действия, необходимые при остановки рисования связи по любому сценарию
    * @private
    */
-  private stopDrawing() {
+  private stopDrawing(): void {
     this.drawing = false;
     this.stopDraw$.next();
   }
 
-  private listenContainerMouseUp(container: Container) {
+  private listenContainerMouseUp(container: Container): void {
     fromEvent(container, 'pointerup')
       .pipe(takeUntil(this.stopDraw$))
       .subscribe(() => {
         this.dropConnection();
+      });
+  }
+
+  private listenBranchMoves(): void {
+    merge(this.sourceBranch.move, this.targetBranch.move)
+      .subscribe(() => {
+        this.redraw();
       });
   }
 }

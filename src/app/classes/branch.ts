@@ -13,7 +13,7 @@ const TEXT_STYLE = new TextStyle({
 
 export type ConnectionInfo = {
   connection: Connection;
-  side: 'source' | 'target';
+  type: 'source' | 'target' | 'cycle';
 };
 
 export type BranchOptions = {
@@ -50,7 +50,7 @@ export class Branch {
   /**
    * Соединение с другим блоком (TODO: сделать array)
    */
-  public connection: Connection;
+  public connections: ConnectionInfo[] = [];
   /**
    * Pixi элемент точки, от которой тащить стрелку
    */
@@ -59,17 +59,12 @@ export class Branch {
    * Сабджект, чтоб эмитить нажатия на кнопку
    * @private
    */
-  private dotClick$ = new Subject<BranchInteractionEvent>();
+  private dotClick$ = new Subject<Branch>();
   /**
    * Сабджект, чтоб эмитить, что отпустили на прямоугольнике, чтоб понимать, что можно закрывать связь
    * @private
    */
-  private mouseUp$ = new Subject<BranchInteractionEvent>();
-  /**
-   * Чтоб можно было трекать когда двигается и перерисовывать связи с новыми координатами
-   * @private
-   */
-  private move$ = new Subject<undefined>();
+  private mouseUp$ = new Subject<Branch>();
   /**
    * Чтоб можно было трекать когда двигается и перерисовывать связи с новыми координатами
    * @private
@@ -153,11 +148,11 @@ export class Branch {
   private initConnectionListeners(): void {
     this.connectionPoint.on('pointerdown', (event: InteractionEvent) => {
       event.stopPropagation(); // чтоб ивент не прокидывался на полотно и не отрабатывали dragListeners
-      this.dotClick$.next({ branch: this, event });
+      this.dotClick$.next(this);
     });
     this.container.on('pointerup', (event: InteractionEvent) => {
       event.stopPropagation();
-      this.mouseUp$.next({ branch: this, event });
+      this.mouseUp$.next(this);
     });
   }
 
