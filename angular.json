@@ -18,7 +18,8 @@
           "builder": "@angular-devkit/build-angular:browser",
           "options": {
             "allowedCommonJsDependencies": [
-              "es6-promise-polyfill"
+              "es6-promise-polyfill",
+              "faker"
             ],
             "outputPath": "dist/canvas-prototype",
             "index": "src/index.html",
@@ -69,7 +70,12 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "browserTarget": "canvas-prototype:build"
+            "browserTarget": "canvas-prototype:build",
+            "sourceMap": {
+              "scripts": true,
+              "styles": true,
+              "vendor": true
+            }
           },
           "configurations": {
             "production": {

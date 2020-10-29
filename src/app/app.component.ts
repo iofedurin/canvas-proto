@@ -1,12 +1,7 @@
-import {AfterViewInit, Component, ElementRef, Inject, OnDestroy, ViewChild} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, OnDestroy, ViewChild} from '@angular/core';
 
-import * as PIXI from 'pixi.js';
-import {DOCUMENT} from '@angular/common';
-import {Viewport} from 'pixi-viewport';
-import {Branch, Connection} from './classes';
 import {Subject} from 'rxjs';
-import { random } from 'faker';
-import {takeUntil} from 'rxjs/operators';
+import {BotCanvas} from './classes/bot-canvas';
 
 @Component({
   selector: 'app-root',
@@ -17,17 +12,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   title = 'canvas-prototype';
   unsubscribe$ = new Subject();
 
-  private pixiApp: PIXI.Application;
-  private viewport: Viewport;
-  private processingConnection?: Connection;
+  private botCanvas: BotCanvas;
 
   @ViewChild('canvasWrap') canvasWrap!: ElementRef<HTMLElement>;
 
-  constructor(@Inject(DOCUMENT) private readonly document: Document) {
-  }
+  constructor() {}
 
   ngAfterViewInit(): void {
-    this.initPixiAndViewPort();
+    this.botCanvas = new BotCanvas(this.canvasWrap.nativeElement);
   }
 
   ngOnDestroy() {
@@ -36,50 +28,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   addCard() {
-    const card = new Branch(random.words(3));
-    this.viewport.addChild(card.canvasContainer);
-    card.pointClicks
-      .pipe(takeUntil(this.unsubscribe$))
-      .subscribe(emittedCard => {
-        if (!this.processingConnection) {
-          this.processingConnection = Connection.create(this.viewport);
-        }
-        console.log('1', this.processingConnection);
-        this.processingConnection.addCard(emittedCard);
-      });
-    //card.mouseUp.subscribe(emittedCard => {
-    //  if (this.processingConnection?.first) {
-    //    this.processingConnection.addCard(emittedCard);
-    //  }
-    //});
+    this.botCanvas.addBranch();
   }
 
-  initPixiAndViewPort() {
-    this.pixiApp = new PIXI.Application({backgroundColor: 0xFFFFFF, resizeTo: this.canvasWrap.nativeElement});
-    this.document.body.appendChild(this.pixiApp.view);
-
-    this.viewport = new Viewport({
-      screenWidth: window.innerWidth,
-      screenHeight: window.innerHeight,
-      worldWidth: 1000,
-      worldHeight: 1000,
-      interaction: this.pixiApp.renderer.plugins.interaction
-    });
-    this.viewport.drag().wheel();
-    this.pixiApp.stage.addChild(this.viewport);
-    this.viewport.on('pointerup', (event) => {
-      console.log('viewport up');
-      console.log(this.processingConnection);
-      this.processingConnection?.drop();
-    });
-    // add a red box
-    const sprite = this.viewport.addChild(new PIXI.Sprite(PIXI.Texture.WHITE));
-    sprite.tint = 0xff0000;
-    sprite.width = sprite.height = 100;
-    sprite.position.set(100, 100);
-  }
-
-   //drawBlock(): void {
+   // drawBlock(): void {
    // const card = new Graphics();
    // card.beginFill(0xedebf2);
    // card.drawRoundedRect(50, 50, rectWidth, rectHeight, 10);
@@ -162,5 +114,5 @@ export class AppComponent implements AfterViewInit, OnDestroy {
    //     this.y = newPosition.y - rectHeight / 1.5;
    //   }
    // }
-   //}
+   // }
 }

@@ -1,8 +1,7 @@
 import {Branch} from './branch';
-import {Graphics, InteractionEvent} from 'pixi.js';
-import {fromEvent, Subject, Subscription} from 'rxjs';
-
-import {Viewport} from 'pixi-viewport';
+import {Container, Graphics, InteractionEvent} from 'pixi.js';
+import {fromEvent, Subject} from 'rxjs';
+import {takeUntil} from 'rxjs/operators';
 
 export interface IPoint {
   x: number;
@@ -10,73 +9,125 @@ export interface IPoint {
 }
 
 export class Connection extends Graphics {
-  first?: Branch;
-  second?: Branch;
-  drawing = false;
-  viewport: Viewport;
-  prevLine: any;
+  /**
+   * Создание связи в процессе (клиент тянет стрелку куда-то)
+   */
+  private drawing = false;
+  /**
+   * Т.к. при движении курсора линия перерисовывается нужно сохранять старую, чтоб вызвать у нее destroy()
+   */
+  private prevLine: Graphics;
 
-  mouseup = fromEvent(document, 'mouseup');
-  mousemoveSub?: Subscription;
+  public sourceBranch?: Branch;
+  public targetBranch?: Branch;
 
-  private line$ = new Subject();
+  /**
+   * Триггер для rxjs пайпа takeUntil()
+   * @private
+   */
+  private stopDraw$ = new Subject();
 
-  constructor(geometry?: PIXI.GraphicsGeometry) {
+  /**
+   * @param container контейнер в котором рисовать связь
+   * @param geometry наследованый от Graphics параметр
+   */
+  constructor(private readonly container: Container, geometry?: PIXI.GraphicsGeometry) {
     super(geometry);
+    this.listenContainerMouseUp(container);
   }
 
-  static create(viewPort: Viewport): Connection {
-    const connection = new Connection();
-    connection.viewport = viewPort;
-    return connection;
-  }
-
-  setViewPort(vp) {
-    this.viewport = vp;
-  }
-
-  addCard(card: Branch) {
-    if (!this.first) {
-      this.first = card;
-      this.startDrawing(card.connectionPoint);
+  /**
+   * Добавляем ветку в связь, если есть source, то значит связь "закрываем"
+   * @param branch
+   */
+  public addConnectionSide(branch: Branch) {
+    if (!this.sourceBranch) {
+      this.sourceBranch = branch;
+      this.startDrawing(branch.connectionPoint);
     } else {
-      this.second = card;
-      this.endDrawing();
+      this.targetBranch = branch;
+      this.finalizeLine();
     }
   }
 
-  drop() {
-    this.endDrawing();
-    this.first = undefined;
-    this.second = undefined;
+  /**
+   * Удаляем предыдущую линию, рисуем новую по двум точкам
+   * @private
+   */
+  private drawLine(from: IPoint, to: IPoint) {
+    this.prevLine?.destroy();
+    const line = new Graphics();
+    line.lineStyle(1, 0x000000, 0.7);
+    line.moveTo(from.x, from.y);
+    line.lineTo(to.x, to.y);
+    this.prevLine = line;
+    this.container.addChild(line);
   }
 
-  startDrawing(dot) {
+  /**
+   * Заканчиваем отрисовку, удаляем существу
+   */
+  public dropConnection() {
+    this.stopDrawing();
+    this.prevLine?.destroy();
+    this.sourceBranch = undefined;
+    this.targetBranch = undefined;
+  }
+
+  /**
+   * Заканчиваем отрисовку, перерисовывам связь с учетом координат двух блоков
+   * @private
+   */
+  private finalizeLine() {
+    this.stopDrawing();
+    this.sourceBranch.connection = this;
+    this.targetBranch.connection = this;
+
+    const sourcePoint: IPoint = {
+      x: this.sourceBranch.connectionSourceGlobalCoordinates.x,
+      y: this.sourceBranch.connectionSourceGlobalCoordinates.y
+    };
+    const targetPoint: IPoint = {
+      x: this.targetBranch.container.x,
+      y: this.targetBranch.container.y + this.targetBranch.container.height / 2
+    };
+    this.drawLine(sourcePoint, targetPoint);
+  }
+
+  /**
+   * Начинаем "слушать" движения курсора, на каждый emit перерисовываем
+   * @param connectionSource
+   * @private
+   */
+  private startDrawing(connectionSource: Graphics) {
     this.drawing = true;
-    this.mousemoveSub = fromEvent(dot, 'pointermove').subscribe((event: InteractionEvent) => {
-      this.prevLine?.destroy();
-
-      const line = new Graphics();
-      line.lineStyle(3, 0xEB6734, 1);
-      line.moveTo(this.first.x + 60, this.first.y + 60);
-
-      const relativePoint = this.viewport.toLocal(event.data.global);
-      line.lineTo(relativePoint.x, relativePoint.y);
-
-      this.prevLine = line;
-      this.viewport.addChild(line);
-    });
+    fromEvent(connectionSource, 'pointermove')
+      .pipe(takeUntil(this.stopDraw$))
+      .subscribe((event: InteractionEvent) => {
+        const sourcePoint: IPoint = {
+          x: this.sourceBranch.connectionSourceGlobalCoordinates.x,
+          y: this.sourceBranch.connectionSourceGlobalCoordinates.y
+        };
+        const targetPoint: IPoint = this.container.toLocal(event.data.global);
+        this.drawLine(sourcePoint, targetPoint);
+      });
   }
 
-  endDrawing() {
-    this.mousemoveSub.unsubscribe();
+  /**
+   * Действия, необходимые при остановки рисования связи по любому сценарию
+   * @private
+   */
+  private stopDrawing() {
     this.drawing = false;
+    this.stopDraw$.next();
   }
 
-  switchDirection() {}
-
-  remove() {}
-
-
+  private listenContainerMouseUp(container: Container) {
+    fromEvent(container, 'pointerup')
+      .pipe(takeUntil(this.stopDraw$))
+      .subscribe(() => {
+        this.dropConnection();
+      });
+  }
 }
 

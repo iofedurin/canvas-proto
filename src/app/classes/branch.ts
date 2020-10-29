@@ -1,6 +1,11 @@
 import {Connection} from './connection';
 import {Container, Graphics, InteractionData, InteractionEvent, Text, TextStyle} from 'pixi.js';
-import {Subject} from 'rxjs';
+import {Observable, Subject} from 'rxjs';
+
+export type BranchInteractionEvent = {
+  event: InteractionEvent;
+  branch: Branch;
+};
 
 const TEXT_STYLE = new TextStyle({
   fontSize: 12,
@@ -28,10 +33,15 @@ export class Branch {
    */
   private textMaxLength = 30;
   /**
-   * Контейнер, в котором лежат все эелементы Pixi от текущей Branch
+   * Радиус круга :)
    * @private
    */
-  private readonly container: Container;
+  private circleRadius = 4;
+  /**
+   * Контейнер, в котором лежат все эелементы Pixi от текущей Branch. Сам не отрисовывается, но имеет свое положение в рамках канваса.
+   * @private
+   */
+  public readonly container: Container;
   /**
    * Соединение с другим блоком (TODO: сделать array)
    */
@@ -39,17 +49,22 @@ export class Branch {
   /**
    * Pixi элемент точки, от которой тащить стрелку
    */
-  private readonly connectionPoint: Graphics;
+  public readonly connectionPoint: Graphics;
   /**
    * Сабджект, чтоб эмитить нажатия на кнопку
    * @private
    */
-  private dotClick$ = new Subject<Branch>();
+  private dotClick$ = new Subject<BranchInteractionEvent>();
   /**
    * Сабджект, чтоб эмитить, что отпустили на прямоугольнике, чтоб понимать, что можно закрывать связь
    * @private
    */
-  private mouseUp$ = new Subject<Branch>();
+  private mouseUp$ = new Subject<BranchInteractionEvent>();
+  /**
+   * Чтоб можно было трекать когда двигается и перерисовывать связи с новыми координатами
+   * @private
+   */
+  private move$ = new Subject<undefined>();
   /**
    * Текстовый блок, вынесен в проперти, чтоб можно было редактировать
    */
@@ -66,12 +81,13 @@ export class Branch {
     this.initConnectionListeners();
   }
 
-  get canvasContainer() {
-    return this.container;
-  }
-
-  get connectionSource() {
-    return this.connectionPoint;
+  /**
+   * Координаты точки создания связи локальны относительно контейнера, поэтому считаем с учетом положения самого контейнера
+   */
+  get connectionSourceGlobalCoordinates() {
+    const { x, y } = this.utils.getAbsoluteCoordinates(this.connectionPoint);
+    const circleDiameter = this.circleRadius / 2;
+    return { x: x - circleDiameter, y: y - circleDiameter };
   }
 
   /**
@@ -98,9 +114,8 @@ export class Branch {
     const circle = new Graphics();
     circle.lineStyle(1.5, 0x000000, 1);
     circle.beginFill(0xFFFFFF, 1);
-    const circleRadius = 4;
     // вычетание половины радиуса нужно, чтоб оцентровать его
-    circle.drawCircle(- circleRadius / 2, - circleRadius / 2, circleRadius);
+    circle.drawCircle(- this.circleRadius / 2, - this.circleRadius / 2, this.circleRadius);
     circle.endFill();
     circle.interactive = true;
     circle.buttonMode = true;
@@ -122,17 +137,17 @@ export class Branch {
   }
 
   /**
-   * Прокидывание наружу нажатия на точку, от которой вести стрелку + отжатие мыши поверх карточки, чтоб закрывать связь
+   * Прокидывание наружу нажатия на точку, от которой вести стрелку + отжатие ЛКМ поверх карточки, чтоб закрывать связь
    * @private
    */
-  private initConnectionListeners() {
+  private initConnectionListeners(): void {
     this.connectionPoint.on('pointerdown', (event: InteractionEvent) => {
       event.stopPropagation(); // чтоб ивент не прокидывался на полотно и не отрабатывали dragListeners
-      this.dotClick$.next(this);
+      this.dotClick$.next({ branch: this, event });
     });
     this.container.on('pointerup', (event: InteractionEvent) => {
       event.stopPropagation();
-      this.mouseUp$.next(this);
+      this.mouseUp$.next({ branch: this, event });
     });
   }
 
@@ -140,7 +155,7 @@ export class Branch {
    * Обработка ивентов для перемещения блока по канвасу
    * @private
    */
-  private initDragListeners() {
+  private initDragListeners(): void {
     let data: InteractionData; // инфа о ивенте mousedown по элементу
     let dragging = false; // маркер того, идет ли перемещиение эелемента в данный момент
 
@@ -160,6 +175,7 @@ export class Branch {
         const newPosition = data.getLocalPosition(this.container.parent);
         this.container.x = newPosition.x - 100 / 1.5;
         this.container.y = newPosition.y - this.height / 1.5;
+        this.move$.next();
       }
     };
     this.container
@@ -172,21 +188,39 @@ export class Branch {
   /**
    * Эвент отпускания ЛКМ поверх карточки обернутый в observable
    */
-  get mouseUp() {
+  get mouseUp(): Observable<BranchInteractionEvent> {
     return this.mouseUp$.asObservable();
+  }
+
+  get move(): Observable<undefined> {
+    return this.move$.asObservable();
   }
 
   /**
    * Эвент нажатия на точку связи обернутый в observable
    */
-  get pointClicks() {
+  get pointClicks(): Observable<BranchInteractionEvent> {
     return this.dotClick$.asObservable();
   }
 
-  get utils() {
+  private get utils() {
     return {
+      /**
+       * Утилитк для обрезания слишком длинного текста с троеточием на конце
+       * @param text
+       */
       spliceText: (text: string) => {
         return text.length > this.textMaxLength - 3 ? `${text.slice(0, this.textMaxLength)}...` : text;
+      },
+      /**
+       * Утилита для получения глобальных координат эелементов в контейнере относительно канваса
+       * @param item
+       */
+      getAbsoluteCoordinates: (item: { x: number, y: number }): { x: number, y: number } => {
+        return {
+          x: this.container.x + item.x,
+          y: this.container.y + item.y,
+        };
       }
     };
   }
