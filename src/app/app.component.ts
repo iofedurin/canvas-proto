@@ -5,6 +5,7 @@ import {DOCUMENT} from '@angular/common';
 import {Viewport} from 'pixi-viewport';
 import {Branch, Connection} from './classes';
 import {Subject} from 'rxjs';
+import { random } from 'faker';
 import {takeUntil} from 'rxjs/operators';
 
 @Component({
@@ -35,9 +36,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   addCard() {
-    const card = new Branch();
+    const card = new Branch(random.words(3));
     this.viewport.addChild(card.canvasContainer);
-    card.dotClicks
+    card.pointClicks
       .pipe(takeUntil(this.unsubscribe$))
       .subscribe(emittedCard => {
         if (!this.processingConnection) {
@@ -46,11 +47,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         console.log('1', this.processingConnection);
         this.processingConnection.addCard(emittedCard);
       });
-    card.mouseUp.subscribe(emittedCard => {
-      if (this.processingConnection?.first) {
-        this.processingConnection.addCard(emittedCard);
-      }
-    });
+    //card.mouseUp.subscribe(emittedCard => {
+    //  if (this.processingConnection?.first) {
+    //    this.processingConnection.addCard(emittedCard);
+    //  }
+    //});
   }
 
   initPixiAndViewPort() {
@@ -71,6 +72,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       console.log(this.processingConnection);
       this.processingConnection?.drop();
     });
+    // add a red box
+    const sprite = this.viewport.addChild(new PIXI.Sprite(PIXI.Texture.WHITE));
+    sprite.tint = 0xff0000;
+    sprite.width = sprite.height = 100;
+    sprite.position.set(100, 100);
   }
 
    //drawBlock(): void {
