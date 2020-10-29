@@ -21,7 +21,7 @@ export class Branch {
   /**
    * Боковые отступы текста от краев блока
    */
-  public textSideMargin = 40;
+  public textSideMargin = 10;
   /**
    * Максимальное количество символов в тексте
    * @private
@@ -44,12 +44,12 @@ export class Branch {
    * Сабджект, чтоб эмитить нажатия на кнопку
    * @private
    */
-  private dotClick$ = new Subject<Graphics>();
+  private dotClick$ = new Subject<Branch>();
   /**
    * Сабджект, чтоб эмитить, что отпустили на прямоугольнике, чтоб понимать, что можно закрывать связь
    * @private
    */
-  private mouseUp$ = new Subject<Graphics>();
+  private mouseUp$ = new Subject<Branch>();
   /**
    * Текстовый блок, вынесен в проперти, чтоб можно было редактировать
    */
@@ -63,7 +63,7 @@ export class Branch {
     this.textNode.x = this.textSideMargin;
     this.textNode.y = (this.container.height - this.textNode.height) / 2;
     this.initDragListeners();
-    this.initDotListeners();
+    this.initConnectionListeners();
   }
 
   get canvasContainer() {
@@ -122,13 +122,17 @@ export class Branch {
   }
 
   /**
-   * Прокидывание наружу нажатия на точку, от которой вести стрелку
+   * Прокидывание наружу нажатия на точку, от которой вести стрелку + отжатие мыши поверх карточки, чтоб закрывать связь
    * @private
    */
-  private initDotListeners() {
-    this.connectionPoint.on('pointerdown', (event: MouseEvent) => {
+  private initConnectionListeners() {
+    this.connectionPoint.on('pointerdown', (event: InteractionEvent) => {
       event.stopPropagation(); // чтоб ивент не прокидывался на полотно и не отрабатывали dragListeners
-      this.dotClick$.next(this.connectionPoint);
+      this.dotClick$.next(this);
+    });
+    this.container.on('pointerup', (event: InteractionEvent) => {
+      event.stopPropagation();
+      this.mouseUp$.next(this);
     });
   }
 
