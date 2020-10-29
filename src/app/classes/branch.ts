@@ -11,6 +11,11 @@ const TEXT_STYLE = new TextStyle({
   fontSize: 12,
 });
 
+export type ConnectionInfo = {
+  connection: Connection;
+  side: 'source' | 'target';
+};
+
 export type BranchOptions = {
   /**
    * default: false; Indicates if a branch can be linked as a child.
@@ -60,6 +65,11 @@ export class Branch {
    * @private
    */
   private mouseUp$ = new Subject<BranchInteractionEvent>();
+  /**
+   * Чтоб можно было трекать когда двигается и перерисовывать связи с новыми координатами
+   * @private
+   */
+  private move$ = new Subject<undefined>();
   /**
    * Чтоб можно было трекать когда двигается и перерисовывать связи с новыми координатами
    * @private
@@ -188,7 +198,7 @@ export class Branch {
   /**
    * Эвент отпускания ЛКМ поверх карточки обернутый в observable
    */
-  get mouseUp(): Observable<BranchInteractionEvent> {
+  get mouseUp(): Observable<Branch> {
     return this.mouseUp$.asObservable();
   }
 
@@ -199,7 +209,7 @@ export class Branch {
   /**
    * Эвент нажатия на точку связи обернутый в observable
    */
-  get pointClicks(): Observable<BranchInteractionEvent> {
+  get pointClicks(): Observable<Branch> {
     return this.dotClick$.asObservable();
   }
 

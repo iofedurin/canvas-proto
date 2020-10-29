@@ -11,7 +11,8 @@ export class BotCanvas {
    */
   private readonly pixiApp: Application;
   /**
-   * Viewport-либа, ответственна за зум и двигание полотна
+   * Viewport-либа, ответственна за зум и двигание полотна. По факту все рисуется имеено в ней,
+   * а она уже лежит в Pixi-канвасе
    * @private
    */
   private readonly viewport: Viewport;
@@ -37,17 +38,17 @@ export class BotCanvas {
    * когда отпускаешь ЛКМ поверх ветки (для того чтоб закрыть связь)
    */
   addBranch() {
-    const container = new Branch(random.words(3));
-    this.viewport.addChild(container.container);
-    container.pointClicks
-      .subscribe(cont => {
+    const newBranch = new Branch(random.words(3));
+    this.viewport.addChild(newBranch.container);
+    newBranch.pointClicks
+      .subscribe(branch => {
         this.processingConnection = new Connection(this.viewport);
-        this.processingConnection.addConnectionSide(cont.branch);
+        this.processingConnection.addConnectionSide(branch);
       });
-    container.mouseUp
-      .subscribe(cont => {
+    newBranch.mouseUp
+      .subscribe(branch => {
         if (this.processingConnection?.sourceBranch) {
-          this.processingConnection.addConnectionSide(cont.branch);
+          this.processingConnection.addConnectionSide(branch);
           this.processingConnection = undefined;
         }
       });
